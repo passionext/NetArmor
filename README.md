@@ -1,7 +1,9 @@
 Nginx Observability Stack: Loki, Promtail, and Grafana
 
 This repository contains a complete, containerized laboratory to demonstrate how to implement modern log monitoring and observability. It uses Nginx as a Load Balancer, formats the access logs in JSON, and ships them to Grafana using the Loki and Promtail pipeline.
-🏗️ Architecture Overview
+
+
+**🏗️ Architecture Overview**
 
 This project follows the "One Process, One Container" philosophy. Here is how the components interact:
 
@@ -15,7 +17,7 @@ This project follows the "One Process, One Container" philosophy. Here is how th
 
     Grafana: The visualization layer. It queries Loki to build dashboards and analyze traffic.
 
-📂 Project Structure
+**📂 Project Structure**
 
 You will need three main files in your root directory to run this stack:
 
@@ -25,7 +27,7 @@ You will need three main files in your root directory to run this stack:
 
     promtail-config.yml: The configuration file telling Promtail where to find the logs and where to send them.
 
-🚀 How to Run the Lab
+**🚀 How to Run the Lab**
 Prerequisites
 
 Make sure you have Docker and Docker Compose installed on your machine (e.g., Debian/Ubuntu).
@@ -73,7 +75,7 @@ Once inside Grafana, you need to query the logs:
 
     Crucial Step: Ensure your time picker (top right) is set to "Last 1 hour" or "Last 24 hours" to match your server's timezone, then click Run Query.
 
-🧠 How the "Magic" Works (Deep Dive)
+**🧠 How the "Magic" Works (Deep Dive)**
 The Shared Volume Strategy
 
 A common pitfall in Docker is that containers are isolated. If Nginx writes a log file, Promtail cannot see it by default. We solve this using a Named Volume in the docker-compose.yml:
@@ -92,7 +94,8 @@ This is incredibly powerful because Grafana can automatically parse JSON, allowi
 Wildcard Log Scraping
 
 In promtail-config.yml, we use a wildcard __path__: /var/log/nginx/*.log. This prevents naming mismatches. Whether Nginx writes to access.log, my_access.log, or web_access.log, Promtail will find it and ship it to Loki.
-🛠️ Troubleshooting
+
+**🛠️ Troubleshooting**
 
     No logs in Grafana? * Check if Nginx actually created the file: docker exec nginx-lb ls -lh /var/log/nginx
 
