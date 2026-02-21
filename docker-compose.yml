@@ -1,29 +1,53 @@
 services:
   nginx-lb:
     image: nginx:latest
+    restart: always
     ports:
       - "80:80"
     volumes:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - nginx-logs:/var/log/nginx  # Scrive nel volume condiviso
+    depends_on:
+      - webapp
     networks:
       - backend-net
-    # Questo dice a Docker di mandare i log a Loki invece che solo allo schermo
-    logging:
-      driver: json-file # Per ora usiamo il default, poi ti spiego come collegarlo a Loki
+
+  webapp:
+    image: nginxdemos/hello:latest
+    restart: always
+    networks:
+      - backend-net
 
   loki:
     image: grafana/loki:latest
+    restart: always
     ports:
       - "3100:3100"
-    command: -config.file=/etc/loki/local-config.yaml
+    networks:
+      - backend-net
+
+  promtail:
+    image: grafana/promtail:latest
+    volumes:
+      - ./promtail-config.yml:/etc/promtail/config.yml:ro
+      - nginx-logs:/var/log/nginx:ro  # Legge dallo STESSO volume (sola lettura)
+    command: -config.file=/etc/promtail/config.yml
     networks:
       - backend-net
 
   grafana:
     image: grafana/grafana:latest
+    restart: always
     ports:
       - "3000:3000"
     environment:
-      - GF_SECURITY_ADMIN_PASSWORD=admin # Cambiala subito dopo!
+      - GF_SECURITY_ADMIN_PASSWORD=admin
     networks:
       - backend-net
+
+volumes:
+  nginx-logs: # Qui Docker crea lo spazio fisico condiviso
+
+networks:
+  backend-net:
+    driver: bridge
