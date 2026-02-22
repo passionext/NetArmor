@@ -1,53 +1,121 @@
 services:
+  # --- REVERSE PROXY & LOAD BALANCER SECTION ---
   nginx-lb:
-    image: nginx:latest
-    restart: always
+    image: nginx:latest            # Pulls the latest official Nginx image from Docker Hub
+    restart: always                # Ensures the container restarts automatically if it crashes or the host reboots
     ports:
-      - "80:80"
+      - "80:80"                    # Maps host port 80 to container port 80 (Standard HTTP)
+      - "443:443"                  # Maps host port 443 to container port 443 (Standard HTTPS)
     volumes:
-      - ./nginx.conf:/etc/nginx/nginx.conf:ro
-      - nginx-logs:/var/log/nginx  # Scrive nel volume condiviso
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro    # Mounts local config file to the container (Read-Only)
+      - ./certs:/etc/nginx/certs:ro              # Mounts your SSL certificates folder (Read-Only)
+      - nginx-logs:/var/log/nginx                # Links to a named volume to share logs with Promtail
     depends_on:
-      - webapp
+      - webapp                     # Ensures 'webapp' starts before Nginx attempts to route traffic
+      - authelia                   # Ensures the authentication portal is up before Nginx starts
     networks:
-      - backend-net
+      - backend-net                # Connects this service to the internal virtual network
 
+  # --- TARGET APPLICATION SECTION ---
   webapp:
-    image: nginxdemos/hello:latest
-    restart: always
+    image: nginxdemos/hello:latest # A demo image that serves a simple "Hello" web page
+    restart: always                # Restarts automatically on failure
     networks:
-      - backend-net
+      - backend-net                # Placed on the internal network so it's reachable by Nginx
 
-  loki:
-    image: grafana/loki:latest
-    restart: always
-    ports:
-      - "3100:3100"
+  # --- DATABASE / CACHE SECTION ---
+  redis:
+    image: redis:alpine            # Uses a lightweight Redis image based on Alpine Linux
+    restart: always                # Keeps the service running at all times
     networks:
-      - backend-net
+      - backend-net                # Used by Authelia for session and state management
+
+  # --- LOGGING STACK (LOKI) ---
+  loki:
+    image: grafana/loki:latest     # The log aggregation system (the "database" for logs)
+    restart: always                # Restarts automatically
+    ports:
+      - "3100:3100"                # Exposes the API port for Grafana to query logs
+    networks:
+      - backend-net                # Communicates with Promtail and Grafana internally
 
   promtail:
-    image: grafana/promtail:latest
+    image: grafana/promtail:latest # The agent that ships logs from the server to Loki
     volumes:
-      - ./promtail-config.yml:/etc/promtail/config.yml:ro
-      - nginx-logs:/var/log/nginx:ro  # Legge dallo STESSO volume (sola lettura)
-    command: -config.file=/etc/promtail/config.yml
+      - ./promtail-config.yml:/etc/promtail/config.yml:ro # Mounts the instruction file for Promtail
+      - nginx-logs:/var/log/nginx:ro                      # Reads the Nginx log volume (Read-Only)
+    command: -config.file=/etc/promtail/config.yml        # Flag to tell Promtail where its config is
     networks:
-      - backend-net
+      - backend-net                # Sends the collected logs to Loki via this network
 
-  grafana:
-    image: grafana/grafana:latest
-    restart: always
+  # --- METRICS STACK (PROMETHEUS) ---
+  prometheus:
+    image: prom/prometheus:latest  # The time-series database for performance metrics
     ports:
-      - "3000:3000"
-    environment:
-      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - "9090:9090"                # Exposes the Prometheus web UI/API
+    restart: always                # Restarts automatically
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml # Mounts the scrape configuration file
+      - prometheus-data:/prometheus                     # Persists the collected metrics data
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'  # Startup flag for config location
     networks:
-      - backend-net
+      - backend-net                # Communicates with exporters and Grafana
 
+  node-exporter:
+    image: prom/node-exporter:latest # Collects hardware and OS metrics from the physical host
+    restart: always                  # Restarts automatically
+    volumes:
+      - /proc:/host/proc:ro          # Allows access to host process information
+      - /sys:/host/sys:ro            # Allows access to host kernel/system information
+      - /:/rootfs:ro                 # Allows access to host filesystem usage
+    command:
+      - '--path.procfs=/host/proc'   # Instructs the tool to find process data in the mount
+      - '--path.rootfs=/rootfs'      # Instructs the tool to find disk data in the mount
+      - '--path.sysfs=/host/sys'     # Instructs the tool to find system data in the mount
+    networks:
+      - backend-net                  # Exposes metrics to Prometheus internally
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:latest # Analyzes resource usage of all running containers
+    restart: always                        # Restarts automatically
+    volumes:
+      - /:/rootfs:ro                       # Root filesystem access
+      - /var/run:/var/run:ro               # Access to the Docker socket/runtime
+      - /sys:/sys:ro                       # Access to system resource files
+      - /var/lib/docker/:/var/lib/docker:ro # Access to Docker's internal data
+      - /dev/disk/:/dev/disk:ro            # Access to disk device information
+    networks:
+      - backend-net                        # Exposes container metrics to Prometheus
+
+  # --- VISUALIZATION SECTION ---
+  grafana:
+    image: grafana/grafana:latest  # The dashboard tool to visualize Loki and Prometheus data
+    restart: always                # Restarts automatically
+    ports:
+      - "3000:3000"                # Exposes the Grafana web interface
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin # Sets the default admin password (change this!)
+    networks:
+      - backend-net                # Connects to Loki and Prometheus to pull data
+
+  # --- SECURITY SECTION (SSO) ---
+  authelia:
+    image: authelia/authelia:latest # The Single Sign-On and 2FA authentication portal
+    container_name: authelia        # Assigns a static name to the container for easy networking
+    restart: always                 # Restarts automatically
+    volumes:
+      - ./authelia:/config          # Mounts the folder containing users and access rules
+    networks:
+      - backend-net                 # Authenticates requests from Nginx on this network
+    environment:
+      - TZ=Europe/Rome              # Sets the Timezone for logs and 2FA sync (TOTP)
+
+# --- GLOBAL INFRASTRUCTURE ---
 volumes:
-  nginx-logs: # Qui Docker crea lo spazio fisico condiviso
+  nginx-logs:      # Persistent shared storage for logs between Nginx and Promtail
+  prometheus-data: # Persistent storage for the Prometheus metrics database
 
 networks:
-  backend-net:
-    driver: bridge
+  backend-net:     # The isolated virtual network for service-to-service communication
+    driver: bridge # Standard bridge driver to allow containers to talk to each other

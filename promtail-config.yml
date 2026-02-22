@@ -1,15 +1,21 @@
+# --- SERVER SETTINGS ---
 server:
-  http_listen_port: 9080
-  grpc_listen_port: 0
+  http_listen_port: 9080           # The port where Promtail runs its own internal web server (for health checks/metrics)
+  grpc_listen_port: 0              # Disables the gRPC port by setting it to 0 (randomly assigned/not used here)
 
+# --- DESTINATION SETTINGS ---
 clients:
-  - url: http://loki:3100/loki/api/v1/push
+  - url: http://loki:3100/loki/api/v1/push # The address of your Loki container where logs will be sent
 
+# --- SCRAPE CONFIGURATIONS ---
+# This section defines WHERE to find logs and HOW to label them
 scrape_configs:
-  - job_name: nginx-logs
+  - job_name: nginx-logs           # A unique name for this specific collection task
     static_configs:
       - targets:
-          - localhost
+          - localhost              # Required boilerplate; Promtail assumes it's scraping the "local" container
         labels:
-          job: nginx
-          __path__: /var/log/nginx/web_access.log # This matches your nginx.conf path
+          job: nginx               # Attaches a "job=nginx" label to all logs for easy searching in Grafana
+          # The absolute path inside the Promtail container where it looks for log files
+          # Note: This must match the volume path you defined in docker-compose.yml
+          __path__: /var/log/nginx/*.log
