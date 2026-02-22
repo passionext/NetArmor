@@ -1,15 +1,24 @@
+# --- GLOBAL SETTINGS ---
 global:
-  scrape_interval: 15s
+  # How often Prometheus will request data from its targets (default is usually 1m)
+  scrape_interval: 15s 
 
+# --- DATA COLLECTION (SCRAPE) CONFIGURATIONS ---
 scrape_configs:
+  # 1. Self-Monitoring: Prometheus collects its own health and performance data
   - job_name: 'prometheus'
     static_configs:
+      # Since it's inside the container, it looks at its own internal port 9090
       - targets: ['localhost:9090']
 
+  # 2. Hardware Monitoring: Data about the physical host (CPU, RAM, Disk)
   - job_name: 'node-exporter'
     static_configs:
+      # Connects to the 'node-exporter' service name defined in your Docker Compose
       - targets: ['node-exporter:9100']
 
+  # 3. Container Monitoring: Data about how much each Docker container is using
   - job_name: 'cadvisor'
     static_configs:
+      # Connects to the 'cadvisor' service name on its default web port
       - targets: ['cadvisor:8080']
