@@ -1,0 +1,52 @@
+# --- NETWORK SERVER SETTINGS ---
+server:
+  # The address/port Authelia listens on. '/authelia' matches the path in your nginx.conf
+  address: 'tcp://0.0.0.0:9091/authelia'
+
+# --- SECURITY & IDENTITY ---
+identity_validation:
+  reset_password:
+    # A secret key used to generate tokens for password resets (keep this private!)
+    jwt_secret: "un_codice_segreto_molto_lungo_e_casuale"
+
+# --- USER DATABASE ---
+authentication_backend:
+  file:
+    # Points to the local YAML file where usernames, hashed passwords, and emails are stored
+    path: /config/users_database.yml
+
+# --- SESSION MANAGEMENT ---
+session:
+  name: authelia_session             # The name of the cookie stored in the user's browser
+  secret: "un_altro_segreto_per_le_sessioni" # Key used to sign the session cookie to prevent tampering
+  remember_me: 1M                    # Allows the user to stay logged in for 1 Month
+  cookies:
+    - domain: 'local.host'           # The domain where the cookie is valid
+      authelia_url: 'https://local.host/authelia' # The portal URL for logging in
+      default_redirection_url: 'https://local.host' # Where to send users after they log in
+  
+  # --- REDIS STORAGE ---
+  # Stores active session data in Redis so logins persist even if the Authelia container restarts
+  redis:
+    host: redis                      # Matches the service name in your docker-compose.yml
+    port: 6379                       # Standard Redis port
+
+# --- PERSISTENT STORAGE ---
+storage:
+  local:
+    path: /config/db.sqlite3         # SQLite database file for 2FA settings and logs
+  # Key used to encrypt sensitive data within the SQLite database
+  encryption_key: "una_chiave_per_criptare_il_db"
+
+# --- NOTIFICATIONS ---
+notifier:
+  # Instead of sending real emails, Authelia writes password reset links to this text file
+  filesystem:
+    filename: /config/emails.txt
+
+# --- ACCESS CONTROL RULES ---
+access_control:
+  default_policy: deny               # High security: Block everything by default unless a rule allows it
+  rules:
+    - domain: "local.host"           # Rule for your specific domain
+      policy: one_factor             # Requires just a username/password (no 2FA required for this rule)
