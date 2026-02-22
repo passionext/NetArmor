@@ -1,0 +1,8 @@
+users:
+  admin:
+    displayname: "Amministratore"
+    # Questa stringa è l'hash Argon2 di: password
+    password: "$argon2id$v=19$m=65536,t=3,p=4$/yJv6sj46hrzbgPy04xWmw$69MNq0x+ea5GujY2VsCM+3oCMrxFZiAyvWP/8CwY3fk"
+    email: admin@local.host
+    groups:
+      - admins
